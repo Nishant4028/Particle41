@@ -1,0 +1,97 @@
+trigger: none
+
+pool:
+  name: NishantAgent
+  demands:
+  - agent.name -equals myagent
+
+          
+variables:
+- name: DEV_ENVIRONMENT
+  value: dev
+
+stages:
+  - stage: TerraformValidate
+    jobs:
+      - job: TerraformValidateJob
+        continueOnError: false
+        steps:
+          - script: sudo apt-get update && sudo apt-get install -y unzip
+            displayName: 'Install unzip'
+          - task: PublishPipelineArtifact@1
+            displayName: Publish Artifacts
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/Terraform_AKS_manifest'
+              artifact: 'terraform-manifests-out'
+              publishLocation: 'pipeline'
+          - task: TerraformInstaller@1
+            displayName: Terraform install
+            inputs:
+              terraformVersion: 'latest'
+          - task: TerraformTaskV4@4
+            displayName: Terraform Init
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Terraform_AKS_manifest'
+              commandOptions: '-reconfigure'
+              backendServiceArm: 'devops-to-azure'
+              backendAzureRmResourceGroupName: 'azuredevops-rg'
+              backendAzureRmStorageAccountName: 'nishant12311'
+              backendAzureRmContainerName: 'tfstatefiles'
+              backendAzureRmKey: 'aks-base.tfstate'
+          - task: TerraformTaskV4@4
+            displayName: Terraform Validate
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/Terraform_AKS_manifest'
+          
+  - stage: DeployAKSClusters
+    jobs:
+      - deployment: DeployDevAKSCluster
+        displayName: DeployDevAKSCluster
+        pool:
+          name: NishantAgent
+          demands:
+          - agent.name -equals myagent
+        environment: $(DEV_ENVIRONMENT)
+        strategy:
+         runOnce:
+           deploy:
+             steps:
+              - task: TerraformInstaller@1
+                displayName: Terraform install
+                inputs:
+                  terraformVersion: 'latest'
+              - task: TerraformTaskV4@4
+                displayName: Terraform Init
+                inputs:
+                  provider: 'azurerm'
+                  command: 'init'
+                  workingDirectory: '$(Pipeline.Workspace)/terraform-manifests-out'
+                  commandOptions: '-reconfigure'
+                  backendServiceArm: 'devops-to-azure'
+                  backendAzureRmResourceGroupName: 'azuredevops-rg'
+                  backendAzureRmStorageAccountName: 'nishant12311'
+                  backendAzureRmContainerName: 'tfstatefiles'
+                  backendAzureRmKey: 'aks-$(DEV_ENVIRONMENT).tfstate'
+              
+              - task: TerraformTaskV4@4
+                displayName: Terraform Plan
+                inputs:
+                  provider: 'azurerm'
+                  command: 'plan'
+                  workingDirectory: '$(Pipeline.Workspace)/terraform-manifests-out'
+                  environmentServiceNameAzureRM: 'devops-to-azure'
+                  commandOptions: '-out=tfplan'
+                
+              - task: TerraformTaskV4@4
+                inputs:
+                  provider: 'azurerm'
+                  command: 'apply'
+                  workingDirectory: '$(Pipeline.Workspace)/terraform-manifests-out'
+                  commandOptions: 'tfplan'
+                  environmentServiceNameAzureRM: 'devops-to-azure'
+                  
+              

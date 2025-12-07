@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: simpletimeservice-service
+spec:
+  type: ClusterIP
+  selector:
+    app: simpletimeservice
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
