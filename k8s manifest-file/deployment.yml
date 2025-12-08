@@ -24,3 +24,4 @@ spec:
       - key: "CriticalAddonsOnly"
         operator: "Exists"
         effect: "NoSchedule"
+# adding this tolerations because currently i have only one nodepool that is systemnodepool, because of cloud resouce constaints
